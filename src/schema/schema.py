@@ -5,7 +5,7 @@ from typing import List, Any, Dict
 class Entity(BaseModel):
     name: str = Field(description="Entity name, e.g. 'Apple Inc.'")
 
-    #For semantic clasification and extraction logic. Helps with validation
+    #For semantic clasification and extraction logic. Helps with validation and entity resolution
 
     # For generalization across different domains
     general_type: str = Field(

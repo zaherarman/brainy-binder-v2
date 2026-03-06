@@ -48,6 +48,8 @@ class IngestionPipeline:
             console=console
         ) as progress:
             task = progress.add_task("Processing documents...", total=len(filepaths))
+            
+            chunks = []
 
             for filepath in filepaths:
                 try:                
@@ -58,11 +60,8 @@ class IngestionPipeline:
                         progress.update(task, advance=1)
                         continue
 
-                    chunks = chunk_documents(documents)
+                    chunks.extend(chunk_documents(documents))
                     stats["chunks_created"] += len(chunks)
-
-                    graph_data = self.neo4j_store.schema_inferrer(chunks)
-                    self.neo4j_store.store_in_neo4j(graph_data)
 
                     stats["files_processed"] += 1
                     stats["documents_index"] += 1
@@ -72,6 +71,9 @@ class IngestionPipeline:
                     stats["files_failed"] += 1
                 
                 progress.update(task, advance=1)
+
+            inferred_document_kg = self.neo4j_store.infer_document_knowledge_graph(chunks)
+            self.neo4j_store.store_in_neo4j(inferred_document_kg)
 
         console.print("\n[bold green]Ingestion complete![/bold green]")
         console.print(f"   > Files discovered: {stats['files_discovered']}")
