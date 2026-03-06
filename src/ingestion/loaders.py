@@ -34,7 +34,7 @@ def load_text_file(filepath):
 
     return documents
     
-def load_pdf_file(filepath, ocr_engine, min_chars_per_page=150, max_pages_to_check=3):
+def load_pdf_file(filepath, min_chars_per_page=150, max_pages_to_check=3):
     """
     Load a PDF (.pdf) file.
 
