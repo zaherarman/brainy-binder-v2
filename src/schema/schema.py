@@ -20,10 +20,9 @@ class Entity(BaseModel):
     # For querying. Graph storage layer
     labels: List[str] = Field(default_factory=list) # default_factory so every object has its own list
     
-    # Extra information attached to each node
+    # Extra information attached to each node. Add default_factory=Dict if you want properties to be optional, will add more nodes
     properties: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Extra attributes like description, synonyms, embedding, etc."
+        description="Useful attributes like description, synonyms, embedding, etc."
     )
 
     # After entity is created, combine general_type and domain_type into labels
@@ -44,7 +43,6 @@ class Relationship(BaseModel):
 
     # Extra information attached to the edge
     properties: Dict[str, Any] = Field(
-        default_factory=dict,
         description="Link metadata such as confidence, evidence span, date, etc."
     )
 
