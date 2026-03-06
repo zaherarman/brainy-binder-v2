@@ -45,7 +45,7 @@ class Neo4jStore:
     def entity_resolution(self, kg: KnowledgeGraph) -> KnowledgeGraph:
         """
         Current strategy:
-            - Only consider entities mergeable if general_type and domain_type match
+            - Only consider entities mergeable if general_type and domain_type match (E.g., Apple tech company vs apple fruit)
             - Prefer the longest name as canonical
             - Merge exact normalized matches
             - Merge short-name matches cautiously (e.g. 'Smith' to 'Dr. John Smith')
@@ -53,10 +53,13 @@ class Neo4jStore:
          # Group entities by semantic type first
         grouped = defaultdict(list)
         for entity in kg.entities:
-            key = (entity.general_type, entity.domain_type)
+            key = (entity.general_type, entity.domain_type) # Resolve only if both labels are the same 
             grouped[key].append(entity)
 
+        # Final clean list of entities
         canonical_entities = []
+
+        # Tracks how original names map to the chosen canonical name
         alias_to_canonical = {}
 
         for i, entities in grouped.items():
@@ -76,22 +79,27 @@ class Neo4jStore:
 
                     # Case 2: one looks like a shortened version of the other
                     # "smith" vs "john smith"
+                    #! Can't handle ambiguity yet, e.g., what if different people have the same first/last name?
                     entity_parts = entity_norm.split()
                     existing_parts = existing_norm.split()
 
+                    # Current entity is less detailed than existing
                     if len(entity_parts) == 1 and entity_parts[0] in existing_parts:
                         matched = existing
                         break
-
+                    
+                    # What if existing entity name is actually less detailed then current entity?
                     if len(existing_parts) == 1 and existing_parts[0] in entity_parts:
                         matched = existing
                         break
-
+                
+                # Keep current (new) entity as canonical
                 if matched is None:
                     resolved_for_group.append(entity)
                     alias_to_canonical[entity.name] = entity.name
+
                 else:
-                    # Keep the more specific/longer name
+                    # Keep the more longer name. Assumes longer = more specific.
                     if len(entity.name) > len(matched.name):
                         old_name = matched.name
                         new_name = entity.name
@@ -99,6 +107,7 @@ class Neo4jStore:
                         # Replace matched canonical entity with better one
                         resolved_for_group.remove(matched)
 
+                        #! entity.properties overrides matched.properties if any match. 
                         merged_properties = {**matched.properties, **entity.properties}
                         better_entity = Entity(
                             name=new_name,
@@ -117,6 +126,7 @@ class Neo4jStore:
             canonical_entities.extend(resolved_for_group)
 
         # Second pass: make alias mapping transitively consistent
+        # Follows alias chains until it reaches the final canonical name
         def resolve_alias(name: str) -> str:
             while name in alias_to_canonical and alias_to_canonical[name] != name:
                 name = alias_to_canonical[name]
@@ -142,6 +152,8 @@ class Neo4jStore:
 
         # Deduplicate relationships after rewrite
         deduped_relationships = []
+
+        # Stores keys we've already seen
         seen = set()
 
         for rel in resolved_relationships:
