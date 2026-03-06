@@ -1,5 +1,23 @@
-from pathlib import Path
 import typer
+import pytesseract
+import os
+from pathlib import Path
+
+TESSERACT_PATH = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+TESSERACT_DIR = str(TESSERACT_PATH.parent)
+TESSDATA_DIR = str(TESSERACT_PATH.parent / "tessdata")
+
+if not TESSERACT_PATH.exists():
+    raise FileNotFoundError(f"Tesseract not found at {TESSERACT_PATH}")
+
+# Make Tesseract visible to subprocesses and OCR libraries
+os.environ["PATH"] = TESSERACT_DIR + os.pathsep + os.environ.get("PATH", "")
+os.environ["TESSDATA_PREFIX"] = TESSDATA_DIR
+
+# Also configure pytesseract directly
+pytesseract.pytesseract.tesseract_cmd = str(TESSERACT_PATH)
+
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -7,19 +25,19 @@ from rich.panel import Panel
 from .config import settings
 from .ingestion.pipeline import IngestionPipeline
 
-app = typer.Typer(name="kg-rag-pipeline", help="Privacy-first local AI knowledge assistant", add_completion=False)
+app = typer.Typer(name="Brainy Binder v2", help="AI knowledge assistant", add_completion=False)
 console = Console()
 
 @app.command()
 def ingest(
-    data_dir: Path = typer.Option(None, "--data-dir"),
-    reset_index: bool = typer.Option(False, "--reset-index"),
+    data_dir: Path,
+    reset_index: bool
 ):    
     
     """Ingest documents from a directory into the knowledge base."""
 
     
-    console.print(Panel.fit("[bold cyan]Brainy Binder - Document Ingestion[/bold cyan]", border_style="cyan"))
+    console.print(Panel.fit("[bold cyan]Brainy Binder v2 - Document Ingestion[/bold cyan]", border_style="cyan"))
 
     data_directory = Path(data_dir) if data_dir else settings.data_dir
     
@@ -42,3 +60,5 @@ def ingest(
         console.print(f"\n[red]Error during ingestion: {e}[/red]")
         raise typer.Exit(code=1)
 
+if __name__ == "__main__":
+    app()
