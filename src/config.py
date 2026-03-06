@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file= BASE_DIR / ".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore")
 
-    llm_base_url: str = "http://localhost:11434/v1"
+    llm_base_url: str = "http://localhost:11434"
     llm_model_name:  str = "mistral:latest"
     llm_temp: float = Field(0.7, ge=0.0, le=2.0)
     llm_max_tokens: int = Field (2048, gt=0)
@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     chunk_size: int = Field(1000, gt=0) # Max size of chunks in charactors
     chunk_overlap: int = Field(300, ge=0)
 
-    NEO4J_URI = os.getenv("NEO4J_URI")
-    NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
-    NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-
+    NEO4J_URI: str
+    NEO4J_USERNAME: str
+    NEO4J_PASSWORD: str
+    NEO4J_DATABASE: str
 settings = Settings()
