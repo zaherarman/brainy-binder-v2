@@ -7,6 +7,7 @@ from src.config import settings
 from src.store.utils import normalize_name, sanitize_label, sanitize_neo4j_properties
 from collections import defaultdict
 from langchain_core.documents import Document
+from pyvis.network import Network
 
 class Neo4jStore:
     def __init__(self):
@@ -239,7 +240,20 @@ class Neo4jStore:
                 """
                 rel_properties = sanitize_neo4j_properties(relationship.properties)
                 session.run(query, {"source_name": relationship.source.strip(), "target_name": relationship.target.strip(), "properties": rel_properties})
-
+    
+    def visualize_results(self):
+        with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
+            query = "MATCH (n)-[r]->(m) RETURN n.name as source, type(r) as rel, m.name as target LIMIT 100"
+            results = session.run(query)
+            net = Network(notebook=True, cdn_resources="remote", directed=True, bgcolor="#ffffff", font_color="black", height="600px")
+            
+            for res in results:
+                net.add_node(res['source'], label=res['source'], color="#4287f5")
+                net.add_node(res['target'], label=res['target'], color="#f54242")
+                net.add_edge(res['source'], res['target'], label=res['rel'])
+            
+            return net.show("knowledge_graph.html")
+    
     def reset(self):
         with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
             session.run("MATCH (n) DETACH DELETE n")
