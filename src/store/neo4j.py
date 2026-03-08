@@ -167,6 +167,30 @@ class Neo4jStore:
             relationships=deduped_relationships,
         )
     
+    def llm_entity_resolution(self, kg: KnowledgeGraph) -> KnowledgeGraph:
+        structured_llm = self.llm.with_structured_output(KnowledgeGraph)
+
+        prompt = ChatPromptTemplate([
+            ("system", """You are an expert Knowledge Graph curator. 
+                            Your task is to perform entity resolution on the provided graph data.
+                            1. Identify duplicate entities (e.g., 'Apple', 'Apple Inc.', 'Apple Computer').
+                            2. Merge them into a single canonical entity, preferring the most descriptive name.
+                            3. Combine their 'properties' dictionaries.
+                            4. Update all 'relationships' to use the new canonical 'source' and 'target' names.
+                            5. Return the cleaned, deduplicated graph"""),
+            ("role", """Raw Entities: {entities}\n
+                        Raw Relationships: {relationships}""")
+        ])
+
+        chain = prompt | structured_llm
+
+        resolved_kg = chain.invoke({
+            "entities": [e.model_dump() for e in kg.entities],
+            "relationships": [r.model_dump() for r in kg.relationships]
+        })
+
+        return resolved_kg
+
     def infer_document_knowledge_graph(self, chunks: list[Document]) -> KnowledgeGraph:
         chunk_graphs = [self.schema_inferrer(chunk.page_content) for chunk in chunks]
         raw_kg = self.combine_chunk_graphs(chunk_graphs)
