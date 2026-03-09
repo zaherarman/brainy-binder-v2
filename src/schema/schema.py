@@ -22,13 +22,14 @@ class Entity(BaseModel):
     
     # Extra information attached to each node. Add default_factory=Dict if you want properties to be optional, will add more nodes
     properties: Dict[str, Any] = Field(
+        default_factory=dict,
         description="Useful attributes like description, synonyms, embedding, etc."
     )
 
     # After entity is created, combine general_type and domain_type into labels
     @model_validator(mode="after")
     def validate_labels(self):
-        self.labels = [self.general_type, self.domain_type]
+        self.labels = list(set(self.labels + [self.general_type, self.domain_type]))
         return self
 
 # Think of a neo4j edge as the following: (SourceEntity)-[:domain_relation {property1: value1, property2: value2}]->(TargetEntity) 
@@ -43,6 +44,7 @@ class Relationship(BaseModel):
 
     # Extra information attached to the edge
     properties: Dict[str, Any] = Field(
+        default_factory=dict,
         description="Link metadata such as confidence, evidence span, date, etc."
     )
 
