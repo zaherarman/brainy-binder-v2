@@ -27,4 +27,5 @@ class Settings(BaseSettings):
     NEO4J_USERNAME: str
     NEO4J_PASSWORD: str
     NEO4J_DATABASE: str
+    
 settings = Settings()
