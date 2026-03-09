@@ -39,7 +39,7 @@ def chunk_documents(documents):
 
     return chunked_docs
 
-def ensure_chunk_vector_index(self, dimensions):
+def ensure_chunk_vector_index(dimensions, neo4j_driver):
     """
     Neo4j vector indexes are created over an embedding property on a node label.
     This enables db.index.vector.queryNodes(...) against chunk embeddings
@@ -56,5 +56,5 @@ def ensure_chunk_vector_index(self, dimensions):
     }}
     """
 
-    with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
+    with neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
         session.run(query)
