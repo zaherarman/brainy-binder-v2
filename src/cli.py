@@ -24,6 +24,7 @@ from rich.panel import Panel
 
 from .config import settings
 from .ingestion.pipeline import IngestionPipeline
+from .llm.answer_engine import AnswerEngine
 
 app = typer.Typer(name="Brainy Binder v2", help="AI knowledge assistant", add_completion=False)
 console = Console()
@@ -59,6 +60,28 @@ def ingest(
     except Exception as e:
         console.print(f"\n[red]Error during ingestion: {e}[/red]")
         raise typer.Exit(code=1)
+
+@app.command()
+def query(
+    question: str,
+    pure_rag_search: bool,
+    hybrid_search: bool
+):
+    try:
+        engine = AnswerEngine()
+
+        with console.status("[bold cyan]Searching and generating answer...[/bold cyan]"):
+            if pure_rag_search:
+                answer = engine.rag_search(question)
+            else:
+                answer = engine.hybrid_search(question)
+
+        console.print(Panel(answer, title="[bold green]Answer[/bold green]", border_style="green"))
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(code=1)
+
 
 if __name__ == "__main__":
     app()
