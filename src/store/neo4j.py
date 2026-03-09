@@ -8,6 +8,8 @@ from src.store.utils import normalize_name, sanitize_label, sanitize_neo4j_prope
 from collections import defaultdict
 from langchain_core.documents import Document
 from pyvis.network import Network
+from typing import List
+from src.ingestion.chunking import ensure_chunk_vector_index
 
 class Neo4jStore:
     def __init__(self):
@@ -33,7 +35,7 @@ class Neo4jStore:
 
         return kg_object
 
-    def combine_chunk_graphs(self, chunk_graphs: list[KnowledgeGraph]) -> KnowledgeGraph:
+    def combine_chunk_graphs(self, chunk_graphs: list[KnowledgeGraph]) -> tuple[KnowledgeGraph, dict[str, str]]:
         all_entities = []
         all_relationships = []
         
@@ -163,42 +165,64 @@ class Neo4jStore:
                 seen.add(key)
                 deduped_relationships.append(rel)
 
-        return KnowledgeGraph(
-            entities=canonical_entities,
-            relationships=deduped_relationships,
-        )
+        return KnowledgeGraph(entities=canonical_entities, relationships=deduped_relationships), alias_to_canonical
     
-    def llm_entity_resolution(self, kg: KnowledgeGraph) -> KnowledgeGraph:
-        structured_llm = self.llm.with_structured_output(KnowledgeGraph)
+    # def llm_entity_resolution(self, kg: KnowledgeGraph) -> KnowledgeGraph:
+    #     structured_llm = self.llm.with_structured_output(KnowledgeGraph)
 
-        prompt = ChatPromptTemplate([
-            ("system", """You are an expert Knowledge Graph curator. 
-                            Your task is to perform entity resolution on the provided graph data.
-                            1. Identify duplicate entities (e.g., 'Apple', 'Apple Inc.', 'Apple Computer').
-                            2. Merge them into a single canonical entity, preferring the most descriptive name.
-                            3. Combine their 'properties' dictionaries.
-                            4. Update all 'relationships' to use the new canonical 'source' and 'target' names.
-                            5. Return the cleaned, deduplicated graph"""),
-            ("role", """Raw Entities: {entities}\n
-                        Raw Relationships: {relationships}""")
-        ])
+    #     prompt = ChatPromptTemplate([
+    #         ("system", """You are an expert Knowledge Graph curator. 
+    #                         Your task is to perform entity resolution on the provided graph data.
+    #                         1. Identify duplicate entities (e.g., 'Apple', 'Apple Inc.', 'Apple Computer').
+    #                         2. Merge them into a single canonical entity, preferring the most descriptive name.
+    #                         3. Combine their 'properties' dictionaries.
+    #                         4. Update all 'relationships' to use the new canonical 'source' and 'target' names.
+    #                         5. Return the cleaned, deduplicated graph"""),
+    #         ("role", """Raw Entities: {entities}\n
+    #                     Raw Relationships: {relationships}""")
+    #     ])
 
-        chain = prompt | structured_llm
+    #     chain = prompt | structured_llm
 
-        resolved_kg = chain.invoke({
-            "entities": [e.model_dump() for e in kg.entities],
-            "relationships": [r.model_dump() for r in kg.relationships]
-        })
+    #     resolved_kg = chain.invoke({
+    #         "entities": [e.model_dump() for e in kg.entities],
+    #         "relationships": [r.model_dump() for r in kg.relationships]
+    #     })
 
-        return resolved_kg
+    #     return resolved_kg
 
-    def infer_document_knowledge_graph(self, chunks: list[Document]) -> KnowledgeGraph:
-        chunk_graphs = [self.schema_inferrer(chunk.page_content) for chunk in chunks]
+    # def infer_document_knowledge_graph(self, chunks: list[Document]) -> KnowledgeGraph:
+    #     chunk_graphs = [self.schema_inferrer(chunk.page_content) for chunk in chunks]
+    #     raw_kg = self.combine_chunk_graphs(chunk_graphs)
+    #     resolved_kg = self.entity_resolution(raw_kg)
+    #     return resolved_kg
+    
+    def build_document_artifacts(self, chunks: List[Document]) -> tuple[list[dict], KnowledgeGraph, dict[str, str]]:
+        chunk_records = []
+        chunk_graphs = []
+
+        for i, chunk in enumerate(chunks):
+            text = chunk.page_content
+            chunk_kg = self.schema_inferrer(text)
+            embedding = self.embedder.embed_documents(text)
+
+            record = {
+                "chunk_index": i,
+                "text": text,
+                "embedding": embedding,
+                "metadata": chunk.metadata or {},
+                "kg": chunk_kg
+            }
+
+            chunk_records.append(record)
+            chunk_graphs.append(chunk_kg)
+
         raw_kg = self.combine_chunk_graphs(chunk_graphs)
-        resolved_kg = self.entity_resolution(raw_kg)
-        return resolved_kg
+        resolved_kg, alias_map = self.entity_resolution(raw_kg)
 
-    def store_in_neo4j(self, resolved_kg: KnowledgeGraph) -> None:
+        return chunk_records, resolved_kg, alias_map
+    
+    def store_in_neo4j(self, doc_id: str, title: str, chunk_records: list[dict], resolved_kg: KnowledgeGraph, alias_map: dict[str, str]) -> None:
         # MERGE means match or create this exact pattern
         # singular letters like n or s or t is just a variable name for the node inside the query
         # Create node, attach Entity label whose name equals $source_name. Arbitrary
@@ -206,14 +230,27 @@ class Neo4jStore:
         
         # (Label1:Label2 {property1: value1, property2: value2})
         # (SourceEntity)-[:domain_relation {property1: value1, property2: value2}]->(TargetEntity)
+        if not chunk_records:
+            return
+        
+        ensure_chunk_vector_index(dimensions=len(chunk_records[0]["embedding"]))
         
         with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
             
-            # Create or merge nodes
+            # Document nodes
+            query = """
+            MERGE (d:Document {id: $doc_id})
+            SET d.title = $title
+            """
+            session.run(query, {"doc_id": doc_id, "title": title})
+            
+            # Entity nodes
             for entity in resolved_kg.entities:
-
+                
                 # Labels cannot be passed as Cypher params, so building them into the query string
-                labels = ":".join(sanitize_label(label) for label in entity.labels)
+                labels = ["Entity"]
+                labels.extend(sanitize_label(label) for label in entity.labels)
+                labels = ":".join(labels)
 
                 query = f"""
                 MERGE (n:{labels} {{name: $name}})
@@ -240,7 +277,40 @@ class Neo4jStore:
                 """
                 rel_properties = sanitize_neo4j_properties(relationship.properties)
                 session.run(query, {"source_name": relationship.source.strip(), "target_name": relationship.target.strip(), "properties": rel_properties})
-    
+            
+            # Chunk nodes + HAS_CHUNK + MENTIONS
+            for record in chunk_records:
+                query = """
+                MATCH (d:Document {id: $doc_id})
+                MERGE (c:Chunk {id: $chunk_id})
+                SET c.text = $text,
+                    c.chunk_index = $chunk_index,
+                    c.embedding = $embedding,
+                    c += $metadata
+                MERGE (d)-[:HAS_CHUNK]->(c)
+                """
+                session.run(query, {
+                    "doc_id": doc_id,
+                    "chunk_id": f"{doc_id}_chunk_{record['chunk_index']}",
+                    "text": record["text"],
+                    "chunk_index": record["chunk_index"],
+                    "embedding": record["embedding"],
+                    "metadata": sanitize_neo4j_properties(record["metadata"]),
+                })
+
+                local_entity_names = {e.name for e in record["kg"].entities}
+
+                for local_name in local_entity_names:
+                    canonical_name = alias_map.get(local_name, local_name)
+
+                    query = """
+                    MATCH (c:Chunk {id: $chunk_id})
+                    MATCH (e:Entity {name: $entity_name})
+                    MERGE (c)-[:MENTIONS]->(e)
+                    """
+
+                    session.run(query, {"chunk_id": f"{doc_id}_chunk_{record['chunk_index']}","entity_name": canonical_name.strip()})
+
     def visualize_results(self):
         with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
             query = "MATCH (n)-[r]->(m) RETURN n.name as source, type(r) as rel, m.name as target LIMIT 100"
