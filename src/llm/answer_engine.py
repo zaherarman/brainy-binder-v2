@@ -37,9 +37,9 @@ class AnswerEngine:
             })
 
         messages = build_rag_prompt(query, context_chunks)
-        answer = self.llm.chat(messages)
+        answer = self.llm.invoke(messages)
 
-        return answer["message"]["content"]
+        return answer.content
    
     def hybrid_search(self, query: str, top_k=None) -> list[dict]:
         query_embedding = self.embedder.embed_query(query)
@@ -82,6 +82,6 @@ class AnswerEngine:
             })
 
         messages = build_hybrid_prompt(query, hybrid_results)
-        answer = self.llm.chat(messages)
+        answer = self.llm.invoke(messages)
 
-        return answer["message"]["content"]
+        return answer.content

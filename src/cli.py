@@ -25,6 +25,7 @@ from rich.panel import Panel
 from .config import settings
 from .ingestion.pipeline import IngestionPipeline
 from .llm.answer_engine import AnswerEngine
+from .store.neo4j import Neo4jStore
 
 app = typer.Typer(name="Brainy Binder v2", help="AI knowledge assistant", add_completion=False)
 console = Console()
@@ -68,12 +69,12 @@ def query(
     hybrid_search: bool
 ):
     try:
-        engine = AnswerEngine()
+        engine = AnswerEngine(Neo4jStore())
 
         with console.status("[bold cyan]Searching and generating answer...[/bold cyan]"):
             if pure_rag_search:
                 answer = engine.rag_search(question)
-            else:
+            elif hybrid_search:
                 answer = engine.hybrid_search(question)
 
         console.print(Panel(answer, title="[bold green]Answer[/bold green]", border_style="green"))

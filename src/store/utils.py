@@ -38,24 +38,23 @@ def sanitize_label(label: str) -> str:
 
     return label
 
-def sanitize_neo4j_properties(properties: dict) -> dict:
-    """
-    Convert properties into Neo4j-safe values.
-    Neo4j supports only primitives and lists of primitives.
-    """
-    safe = {}
+def sanitize_neo4j_properties(data: dict) -> dict:
+    def clean(value):
+        if value is None:
+            return None
 
-    for key, value in properties.items():
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            safe[key] = value
-        elif isinstance(value, list):
-            if all(isinstance(item, (str, int, float, bool)) or item is None for item in value):
-                safe[key] = value
-            else:
-                safe[key] = json.dumps(value)
-        elif isinstance(value, dict):
-            safe[key] = json.dumps(value)
-        else:
-            safe[key] = str(value)
+        if isinstance(value, (str, int, float, bool)):
+            return value
 
-    return safe
+        if isinstance(value, list):
+            cleaned = [clean(v) for v in value]
+            if all(isinstance(v, (str, int, float, bool)) or v is None for v in cleaned):
+                return cleaned
+            return [str(v) for v in cleaned]
+
+        if isinstance(value, dict):
+            return str(value)
+
+        return str(value)
+
+    return {k: v for k, v in ((k, clean(v)) for k, v in data.items()) if v is not None}

@@ -53,13 +53,18 @@ class IngestionPipeline:
             for filepath in filepaths:
                 try:                
                     documents = load_document(filepath)
-
                     if not documents:
                         stats["files_failed"] += 1
                         progress.update(task, advance=1)
                         continue
 
                     chunks = (chunk_documents(documents))
+                    if not chunks:
+                        console.print(f"[yellow]No chunks created for {filepath}[/yellow]")
+                        stats["files_failed"] += 1
+                        progress.update(task, advance=1)
+                        continue
+
                     stats["chunks_created"] += len(chunks)
 
                     doc_id = Path(filepath).stem

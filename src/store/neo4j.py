@@ -35,7 +35,7 @@ class Neo4jStore:
 
         return kg_object
 
-    def combine_chunk_graphs(self, chunk_graphs: list[KnowledgeGraph]) -> tuple[KnowledgeGraph, dict[str, str]]:
+    def combine_chunk_graphs(self, chunk_graphs: list[KnowledgeGraph]) -> KnowledgeGraph:
         all_entities = []
         all_relationships = []
         
@@ -45,7 +45,7 @@ class Neo4jStore:
         
         return KnowledgeGraph(entities=all_entities, relationships=all_relationships)
 
-    def entity_resolution(self, kg: KnowledgeGraph) -> KnowledgeGraph:
+    def entity_resolution(self, kg: KnowledgeGraph) -> tuple[KnowledgeGraph, dict[str, str]]:
         """
         Current strategy:
             - Only consider entities mergeable if general_type and domain_type match (E.g., Apple tech company vs apple fruit)
@@ -204,12 +204,12 @@ class Neo4jStore:
         for i, chunk in enumerate(chunks):
             text = chunk.page_content
             chunk_kg = self.schema_inferrer(text)
-            embedding = self.embedder.embed_documents(text)
+            embeddings = self.embedder.embed_documents([text])
 
             record = {
                 "chunk_index": i,
                 "text": text,
-                "embedding": embedding,
+                "embedding": embeddings[0],
                 "metadata": chunk.metadata or {},
                 "kg": chunk_kg
             }
@@ -221,7 +221,7 @@ class Neo4jStore:
         resolved_kg, alias_map = self.entity_resolution(raw_kg)
 
         return chunk_records, resolved_kg, alias_map
-    
+
     def store_in_neo4j(self, doc_id: str, title: str, chunk_records: list[dict], resolved_kg: KnowledgeGraph, alias_map: dict[str, str]) -> None:
         # MERGE means match or create this exact pattern
         # singular letters like n or s or t is just a variable name for the node inside the query
@@ -233,7 +233,7 @@ class Neo4jStore:
         if not chunk_records:
             return
         
-        ensure_chunk_vector_index(dimensions=len(chunk_records[0]["embedding"]))
+        ensure_chunk_vector_index(dimensions=len(chunk_records[0]["embedding"]), neo4j_driver=self.neo4j_driver)
         
         with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
             
