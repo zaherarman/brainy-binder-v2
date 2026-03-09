@@ -39,6 +39,22 @@ def chunk_documents(documents):
 
     return chunked_docs
 
-def embed_chunks(chunked_docs):
-    embedder = get_embedder()
-    
+def ensure_chunk_vector_index(self, dimensions):
+    """
+    Neo4j vector indexes are created over an embedding property on a node label.
+    This enables db.index.vector.queryNodes(...) against chunk embeddings
+    """
+
+    query = f"""
+    CREATE VECTOR INDEX chunk_embedding_index IF NOT EXISTS
+    FOR (c:Chunk) ON (c.embedding)
+    OPTIONS {{
+      indexConfig: {{
+        `vector.dimensions`: {dimensions},
+        `vector.similarity_function`: 'cosine'
+      }}
+    }}
+    """
+
+    with self.neo4j_driver.session(database=settings.NEO4J_DATABASE) as session:
+        session.run(query)
