@@ -220,7 +220,7 @@ class Neo4jStore:
         raw_kg = self.combine_chunk_graphs(chunk_graphs)
         resolved_kg, alias_map = self.entity_resolution(raw_kg)
 
-        return chunk_records, resolved_kg, alias_map
+        return chunk_records, raw_kg, alias_map
 
     def store_in_neo4j(self, doc_id: str, title: str, chunk_records: list[dict], resolved_kg: KnowledgeGraph, alias_map: dict[str, str]) -> None:
         # MERGE means match or create this exact pattern
