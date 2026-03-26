@@ -23,7 +23,7 @@ class Neo4jStore:
 
     def schema_inferrer(self, text_chunk: str) -> KnowledgeGraph:
         # Turns into an object generator. Output matches KG Pydantic model
-        structured_llm = self.llm.with_structured_output(KnowledgeGraph)
+        structured_llm = self.llm.with_structured_output(KnowledgeGraph, method="function_calling")
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are an experienced and detail-oriented Knowledge Graph engineer. Extract ONLY the most important entities and their direct relationships from the text."),
@@ -220,7 +220,7 @@ class Neo4jStore:
         raw_kg = self.combine_chunk_graphs(chunk_graphs)
         resolved_kg, alias_map = self.entity_resolution(raw_kg)
 
-        return chunk_records, raw_kg, alias_map
+        return chunk_records, resolved_kg, alias_map
 
     def store_in_neo4j(self, doc_id: str, title: str, chunk_records: list[dict], resolved_kg: KnowledgeGraph, alias_map: dict[str, str]) -> None:
         # MERGE means match or create this exact pattern

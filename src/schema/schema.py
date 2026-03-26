@@ -22,6 +22,7 @@ class Entity(BaseModel):
     
     # Extra information attached to each node. Add default_factory=Dict if you want properties to be optional, will add more nodes
     properties: Dict[str, Any] = Field(
+        default_factory=dict,
         description="Useful attributes like description, synonyms, embedding, etc."
     )
 
@@ -43,6 +44,7 @@ class Relationship(BaseModel):
 
     # Extra information attached to the edge
     properties: Dict[str, Any] = Field(
+        default_factory=dict,
         description="Link metadata such as confidence, evidence span, date, etc."
     )
 

@@ -9,9 +9,9 @@ class AnswerEngine:
         self.neo4jstore = neo4jstore
         self.llm = get_llm()
         self.embedder = get_embedder() 
-        self.top_k = top_k or settings.top_k
+        self.top_k = top_k or settings.TOP_K
 
-    def rag_search(self, query: str, top_k=None) -> list[dict]:
+    def rag_search(self, query: str, top_k=None) -> str:
         query_embedding = self.embedder.embed_query(query)
 
         cypher = """
@@ -41,7 +41,7 @@ class AnswerEngine:
 
         return answer.content
    
-    def hybrid_search(self, query: str, top_k=None) -> list[dict]:
+    def hybrid_search(self, query: str, top_k=None) -> str:
         query_embedding = self.embedder.embed_query(query)
 
         # collect turns bundle into list

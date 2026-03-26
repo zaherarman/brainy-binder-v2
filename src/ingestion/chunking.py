@@ -15,8 +15,8 @@ def chunk_documents(documents):
     Returns:
         List of chunked elements with metadata
     """
-    chunk_size = settings.chunk_size
-    chunk_overlap = settings.chunk_overlap
+    chunk_size = settings.CHUNK_SIZE
+    chunk_overlap = settings.CHUNK_OVERLAP
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,

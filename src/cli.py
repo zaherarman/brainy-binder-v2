@@ -2,24 +2,31 @@ import typer
 import pytesseract
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
-TESSERACT_PATH = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-TESSERACT_DIR = str(TESSERACT_PATH.parent)
-TESSDATA_DIR = str(TESSERACT_PATH.parent / "tessdata")
+load_dotenv()
 
-if not TESSERACT_PATH.exists():
-    raise FileNotFoundError(f"Tesseract not found at {TESSERACT_PATH}")
+def configure_tesseract() -> None:
+    """
+    Configure pytesseract to find the `tesseract` binary.
 
-# Make Tesseract visible to subprocesses and OCR libraries
-os.environ["PATH"] = TESSERACT_DIR + os.pathsep + os.environ.get("PATH", "")
-os.environ["TESSDATA_PREFIX"] = TESSDATA_DIR
+    - Prefer explicit env var `TESSERACT_CMD` if set.
+    - On Windows, fall back to the common installation path.
+    - On macOS/Linux, rely on PATH/Homebrew/etc (no hard-coded path, no import-time crash).
+    """
+    env_cmd = os.getenv("TESSERACT_CMD")
+    if env_cmd:
+        pytesseract.pytesseract.tesseract_cmd = env_cmd
+        return
 
-# Also configure pytesseract directly
-pytesseract.pytesseract.tesseract_cmd = str(TESSERACT_PATH)
+    if os.name == "nt":
+        default = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+        if default.exists():
+            pytesseract.pytesseract.tesseract_cmd = str(default)
 
-from pathlib import Path
+configure_tesseract()
+
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 
 from .config import settings
@@ -32,8 +39,8 @@ console = Console()
 
 @app.command()
 def ingest(
-    data_dir: Path,
-    reset_index: bool
+    data_dir: Path = typer.Option(None, "--data-dir", "-d", help="Directory containing documents to ingest"),
+    reset_index: bool = typer.Option(False, "--reset-index", help="Reset Neo4j index before ingesting"),
 ):    
     
     """Ingest documents from a directory into the knowledge base."""
